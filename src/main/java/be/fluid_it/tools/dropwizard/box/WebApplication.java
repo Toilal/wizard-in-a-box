@@ -1,19 +1,17 @@
 package be.fluid_it.tools.dropwizard.box;
 
-import be.fluid_it.tools.dropwizard.box.config.BridgedConfigurationFactoryFactory;
 import be.fluid_it.tools.dropwizard.box.config.ClasspathConfigurationSourceProvider;
 import be.fluid_it.tools.dropwizard.box.config.ConfigurationBridge;
-import be.fluid_it.tools.dropwizard.box.config.JndiConfigurationBridge;
+import be.fluid_it.tools.dropwizard.box.config.BridgedConfigurationFactoryFactory;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
-import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
-import org.eclipse.jetty.util.component.LifeCycle;
 
-import javax.servlet.ServletContext;
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
+import javax.servlet.*;
+
+import org.eclipse.jetty.server.Server;
+
 import java.util.LinkedList;
 import java.util.List;
 
@@ -21,11 +19,11 @@ import java.util.List;
  * A WebApplication decorates a (DropWizard) Application (GoF)
  * @param <C> Dropwizard Configuration class
  */
-public abstract class WebApplication<C extends Configuration> extends Application<C> implements ServletContextListener {
+public abstract class WebApplication<C extends Configuration> extends Application<C> implements ServletContextListener, ServletContextAttributeListener {
     private static ServletContext theServletContext;
-    private final Application<C> dropwizardApplication;
-    private final String[] args;
-    private Environment dropwizardEnvironment;
+    private final List<Destroyable> destroyables = new LinkedList<Destroyable>();
+    protected final Application<C> dropwizardApplication;
+    protected final String[] args;
     private ConfigurationBridge configurationBridge;
 
     public static ServletContext servletContext() {
@@ -68,7 +66,6 @@ public abstract class WebApplication<C extends Configuration> extends Applicatio
     @Override
     public void run(C configuration,
                     Environment environment) throws Exception {
-        dropwizardEnvironment = environment;
         dropwizardApplication.run(configuration, environment);
     }
 
@@ -87,19 +84,40 @@ public abstract class WebApplication<C extends Configuration> extends Applicatio
 
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
-        if (dropwizardEnvironment != null) {
-          LifecycleEnvironment lifecycle = dropwizardEnvironment.lifecycle();
-          if (lifecycle != null) {
-            for (LifeCycle managed : lifecycle.getManagedObjects()) {
-              try {
-                managed.stop();
-              } catch (Exception e) {
-                throw new RuntimeException("Shutdown of Dropwizard failed ...", e);
-              }
+        synchronized (destroyables) {
+            for (Destroyable destroyable : destroyables) {
+                destroyable.destroy();
             }
-          }
-          dropwizardEnvironment = null;
+        }
+        Server server = (Server)theServletContext.getAttribute("fakeJettyServer");
+        if (server != null) {
+            try {
+                server.stop();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
         theServletContext = null;
+    }
+
+    @Override
+    public void attributeAdded(ServletContextAttributeEvent event) {
+        System.out.println(event.getName());
+    }
+
+    @Override
+    public void attributeRemoved(ServletContextAttributeEvent event) {
+        System.out.println(event.getName());
+    }
+
+    @Override
+    public void attributeReplaced(ServletContextAttributeEvent event) {
+        System.out.println(event.getName());
+    }
+
+    public void registerDestroyable(Destroyable destroyable) {
+        synchronized (destroyables) {
+            destroyables.add(destroyable);
+        }
     }
 }

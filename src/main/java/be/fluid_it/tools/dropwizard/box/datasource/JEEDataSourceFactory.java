@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * <br />
  * 
  * You should override
- * {@link DatabaseConfiguration#getDataSourceFactory(io.dropwizard.Configuration)}
+ * {@link DatabaseConfiguration#getDataSourceFactory(Configuration)}
  * from your database bundle to return this factory, using a
  * {@link JEEDataSourceConfiguration} defined in your application
  * {@link Configuration}.
